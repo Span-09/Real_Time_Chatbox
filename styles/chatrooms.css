@@ -132,11 +132,6 @@
 .mute-button.muted {
     background-color: #dc3545; /* Red for muted status */
 }
-/* Add this to your chatrooms.css file */
-.chatroom-item {
-    position: relative; /* Required for the swipe effect */
-    transition: transform 0.3s ease; /* Smooth snap-back animation */
-}
 @keyframes pulse {
     0% { background-position: 200% 0; }
     100% { background-position: -200% 0; }

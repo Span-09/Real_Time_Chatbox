@@ -1,6 +1,6 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
 import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
-import { getFirestore, collection, doc, getDocs, getDoc, query, where, orderBy, limit, setDoc, onSnapshot, updateDoc, addDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+import { getFirestore, collection, doc, getDocs, getDoc, query, where, orderBy, limit, setDoc, onSnapshot, addDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
 // --- Firebase Config ---
 const firebaseConfig = {
@@ -34,13 +34,34 @@ onAuthStateChanged(auth, user => {
     }
 });
 
-// --- Main Data Loading Function ---
+createRoomBtn.addEventListener('click', createNewChatroom);
+
+async function createNewChatroom() {
+    const roomTitle = prompt("Please enter a name for the new chatroom:");
+
+    if (roomTitle && roomTitle.trim() !== '') {
+        try {
+            const roomsRef = collection(db, 'chatrooms');
+            await addDoc(roomsRef, {
+                title: roomTitle,
+                createdAt: serverTimestamp()
+            });
+            loadChatrooms();
+        } catch (error) {
+            console.error("Error creating new chatroom:", error);
+            alert("Failed to create new room.");
+        }
+    } else {
+        alert("Please enter a valid room name.");
+    }
+}
+
 async function loadChatrooms() {
     if (!currentUser) return;
     try {
         const roomsRef = collection(db, 'chatrooms');
         const roomsSnapshot = await getDocs(roomsRef);
-        
+
         const promises = roomsSnapshot.docs.map(async (roomDoc) => {
             const room = { id: roomDoc.id, ...roomDoc.data() };
             const lastMessage = await getLastMessage(room.id);
@@ -50,12 +71,7 @@ async function loadChatrooms() {
 
         const chatroomData = await Promise.all(promises);
 
-        // Sort by last message time
-        chatroomData.sort((a, b) => {
-            const aTime = a.lastMessage.timestamp?.toMillis() || 0;
-            const bTime = b.lastMessage.timestamp?.toMillis() || 0;
-            return bTime - aTime;
-        });
+        chatroomData.sort((a, b) => (b.room.pinned || false) - (a.room.pinned || false));
 
         chatroomListEl.innerHTML = '';
         chatroomData.forEach(data => {
@@ -69,19 +85,25 @@ async function loadChatrooms() {
     }
 }
 
-// --- Helper Functions ---
-
 async function getLastMessage(roomId) {
     const messagesRef = collection(db, 'chatrooms', roomId, 'messages');
     const q = query(messagesRef, orderBy('timestamp', 'desc'), limit(1));
     const snapshot = await getDocs(q);
-    return snapshot.empty ? { text: 'No messages yet...', timestamp: null } : snapshot.docs[0].data();
+    if (snapshot.empty) {
+        return { text: 'No messages yet...', timestamp: null };
+    }
+    const lastMessageData = snapshot.docs[0].data();
+    if (lastMessageData.imageUrl && !lastMessageData.text) {
+        return { text: '📷 Image', timestamp: lastMessageData.timestamp };
+    }
+    return lastMessageData;
 }
 
 async function getUnreadCount(roomId, userId) {
     const readStatusRef = doc(db, 'reads', userId, 'rooms', roomId);
     const readDoc = await getDoc(readStatusRef);
     const lastReadTimestamp = readDoc.exists() ? readDoc.data().lastReadTimestamp : null;
+
     const messagesRef = collection(db, 'chatrooms', roomId, 'messages');
     const unreadQuery = lastReadTimestamp ? query(messagesRef, where('timestamp', '>', lastReadTimestamp)) : query(messagesRef);
     const unreadSnapshot = await getDocs(unreadQuery);
@@ -108,32 +130,24 @@ function createRoomElement(room, lastMessage, unreadCount) {
         <button class="mute-button" data-room-id="${room.id}">Mute</button>
     `;
 
+    const details = roomElement.querySelector('.chatroom-details');
+    details.addEventListener('click', () => {
+        window.location.href = `chat.html?roomId=${room.id}&title=${encodeURIComponent(room.title)}`;
+    });
+
     return roomElement;
 }
 
-async function createNewChatroom() {
-    const roomTitle = prompt("Enter a name for the new chatroom:");
-    if (roomTitle && roomTitle.trim() !== '') {
-        try {
-            await addDoc(collection(db, 'chatrooms'), {
-                title: roomTitle,
-                createdAt: serverTimestamp()
-            });
-            loadChatrooms();
-        } catch (error) {
-            console.error("Error creating new chatroom:", error);
-        }
-    }
-}
-
-// --- Mute and Swipe Logic ---
-
-async function toggleMute(roomId) {
+async function toggleMute(roomId, button) {
     if (!currentUser) return;
     const muteRef = doc(db, 'mutes', currentUser.uid, 'rooms', roomId);
     const muteDoc = await getDoc(muteRef);
     const newMuteStatus = !muteDoc.exists() || !muteDoc.data().muted;
-    await setDoc(muteRef, { muted: newMuteStatus });
+    try {
+        await setDoc(muteRef, { muted: newMuteStatus });
+    } catch (error) {
+        console.error("Error updating mute status:", error);
+    }
 }
 
 function updateMuteButtonUI(button, isMuted) {
@@ -158,38 +172,22 @@ function listenForMuteChanges() {
 
 function addSwipeToMute(element) {
     let longPressTimeout;
-    let longPressFired = false;
-
-    element.addEventListener('mousedown', (e) => {
-        if (e.target.classList.contains('mute-button')) return;
-        longPressFired = false;
+    element.addEventListener('mousedown', () => {
         longPressTimeout = setTimeout(() => {
-            longPressFired = true;
-            toggleMute(element.dataset.roomId);
+            const roomId = element.dataset.roomId;
+            const muteButton = element.querySelector('.mute-button');
+            toggleMute(roomId, muteButton);
         }, 800);
     });
-
     element.addEventListener('mouseup', () => clearTimeout(longPressTimeout));
     element.addEventListener('mouseleave', () => clearTimeout(longPressTimeout));
-    element.addEventListener('click', (e) => {
-        if (longPressFired) {
-            e.preventDefault();
-            e.stopPropagation();
-        } else if (!e.target.classList.contains('mute-button')) {
-            window.location.href = `chat.html?roomId=${element.dataset.roomId}&title=${encodeURIComponent(element.dataset.roomTitle)}`;
-        }
-    }, true);
 }
-
-// --- Event Delegation & Listeners ---
 
 chatroomListEl.addEventListener('click', (e) => {
     if (e.target.classList.contains('mute-button')) {
-        toggleMute(e.target.dataset.roomId);
+        toggleMute(e.target.dataset.roomId, e.target);
     }
 });
-
-createRoomBtn.addEventListener('click', createNewChatroom);
 
 searchBar.addEventListener('keyup', (e) => {
     const term = e.target.value.toLowerCase();
@@ -198,10 +196,4 @@ searchBar.addEventListener('keyup', (e) => {
         const title = room.querySelector('.chatroom-title').textContent.toLowerCase();
         room.style.display = title.includes(term) ? 'flex' : 'none';
     });
-});
-
-window.addEventListener('pageshow', () => {
-    if (currentUser) {
-        listenForMuteChanges();
-    }
 });
