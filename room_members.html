@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Room Members</title>
+  <link rel="stylesheet" href="./styles/style.css" />
+  <link rel="stylesheet" href="./styles/room_members.css" />
+  <link rel="stylesheet" href="./styles/chatrooms.css" />
+  <!-- reuse some common modal/button styles from chatrooms.css if needed -->
+  <script type="module" src="./room_members.js" defer></script>
+  <style>
+    /* Optional: mini reset for this page */
+    body { background: #f3f4f6; }
+  </style>
+  
+</head>
+<body>
+  <div class="members-page">
+    <header class="members-header">
+      <div class="left">
+        <a id="back-link" class="back-link" href="javascript:void(0)">← Back</a>
+        <h1 id="room-title" class="title">Room Members</h1>
+      </div>
+      <div class="right" id="admin-actions" style="display:none">
+        <button id="open-add-members" class="btn-primary">Add Members</button>
+      </div>
+    </header>
+
+    <section class="members-list-section">
+      <div id="members-list" class="members-list">
+        <!-- Live list injected here -->
+      </div>
+      <div id="members-empty" class="members-empty" style="display:none;">No members yet.</div>
+      <div id="members-error" class="form-error" aria-live="polite"></div>
+    </section>
+
+    <!-- Pending invites: UI placeholder only -->
+    <section class="invites-section">
+      <h2 class="section-title">Pending invites</h2>
+      <div class="invites-card">
+        <div id="invites-list" class="invites-list">
+          <div class="invite-empty">No pending invites yet.</div>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <!-- Add Members Modal -->
+  <div id="add-members-modal" class="modal-overlay" style="display:none;">
+    <div class="modal-content">
+      <h2>Add Members</h2>
+      <div class="form-group member-picker-group">
+        <label for="member-search-input">Search users</label>
+        <input id="member-search-input" type="text" placeholder="Type name or email..." autocomplete="off" />
+        <div id="member-search-dropdown" class="member-results"></div>
+        <div id="selected-new-members" class="selected-members"></div>
+        <div id="add-members-error" class="form-error" aria-live="polite"></div>
+      </div>
+      <div class="modal-actions">
+        <button id="cancel-add-members" class="btn-secondary">Cancel</button>
+        <button id="confirm-add-members" class="btn-primary">Add</button>
+      </div>
+    </div>
+  </div>
+</body>
+</html>

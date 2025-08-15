@@ -1,8 +1,9 @@
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js'
 import {
   getAuth,
-  signInAnonymously,
-  onAuthStateChanged
+  onAuthStateChanged,
+  setPersistence,
+  browserLocalPersistence
 } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js'
 import {
   getFirestore,
@@ -23,20 +24,22 @@ import {
   getDownloadURL
 } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-storage.js'
 
-// --- Firebase Config ---
+
 // --- Firebase Config ---
 const firebaseConfig = {
     apiKey: "AIzaSyDEpEbOdl7ysRoYZBj3phVcfA5wxE6W37c",
     authDomain: "real-time-chatbot-372f7.firebaseapp.com",
     projectId: "real-time-chatbot-372f7",
-    storageBucket: "real-time-chatbot-372f7.firebasestorage.app", // <-- This is the corrected line
+  storageBucket: "real-time-chatbot-372f7.appspot.com",
     messagingSenderId: "88476999060",
-    appId: "1:88476g999060:web:ec54d7298b84333d274381",
+  appId: "1:88476999060:web:ec54d7298b84333d274381",
 };
 
 // --- Initialize Firebase ---
 const app = initializeApp(firebaseConfig)
 const auth = getAuth(app)
+// Persist session across reloads/tabs on this device
+try { await setPersistence(auth, browserLocalPersistence) } catch (e) { console.warn('Auth persistence setup failed:', e) }
 const db = getFirestore(app)
 const storage = getStorage(app)
 
@@ -51,6 +54,7 @@ const imageUploadInput = document.getElementById('image-upload-input')
 const imagePreviewContainer = document.getElementById('image-preview-container')
 const imagePreview = document.getElementById('image-preview')
 const removeImageBtn = document.getElementById('remove-image-btn')
+const manageMembersBtn = document.getElementById('manage-members-btn')
 
 let typingTimeout = null
 let isTyping = false
@@ -72,12 +76,13 @@ backButton.addEventListener('click', () => {
 })
 
 onAuthStateChanged(auth, user => {
-  if (user) {
+  if (user && !user.isAnonymous) {
     currentUser = user
     sendButton.disabled = false
     listenForMessages(roomId)
   } else {
-    signInAnonymously(auth).catch(err => console.error(err))
+    // Require explicit sign-in on chatrooms page
+    window.location.href = 'chatrooms.html'
   }
 })
 
@@ -423,5 +428,16 @@ async function uploadImage(file) {
         });
       }
     );
+  });
+}
+
+if (manageMembersBtn) {
+  manageMembersBtn.addEventListener('click', () => {
+    const params = new URLSearchParams(window.location.search);
+    const rid = params.get('roomId');
+    const title = params.get('title');
+    if (rid) {
+      window.location.href = `room_members.html?roomId=${encodeURIComponent(rid)}${title ? `&title=${encodeURIComponent(title)}` : ''}`;
+    }
   });
 }

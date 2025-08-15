@@ -254,6 +254,16 @@ body {
     width: 30px;
     height: 30px;
 }
+#manage-members-btn{
+    padding: 10px;
+    border: none;
+    border-radius: 8px;
+    background: #fff;
+    cursor: pointer;
+}
+#manage-members-btn:hover {
+    background: #f0f0f0;
+}
 
 /* Responsive Design for Mobile */
 @media (max-width: 600px) {

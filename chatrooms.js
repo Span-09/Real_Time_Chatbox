@@ -113,7 +113,9 @@ async function upsertUserProfile(user) {
     const photoUrl = user.photoURL || '';
     const profile = {
         displayName,
+    displayNameLower: displayName.toLowerCase(),
         email,
+    emailLower: email.toLowerCase(),
         photoUrl,
         // Preserve createdAt if exists
         createdAt: existing.exists() && existing.data().createdAt ? existing.data().createdAt : serverTimestamp(),
@@ -126,7 +128,7 @@ async function upsertUserProfile(user) {
 // --- Authentication ---
 onAuthStateChanged(auth, async user => {
     currentUser = user ? user : null;
-    if (currentUser) {
+    if (currentUser && !currentUser.isAnonymous) {
         // Only upsert if user is NOT anonymous
         if (!currentUser.isAnonymous) {
             await ensureProfileDefaults(currentUser);
@@ -146,6 +148,7 @@ onAuthStateChanged(auth, async user => {
         listenForMuteChanges();
         populateCreateFromRoomSelect();
     } else {
+        // Not signed in or anonymous: show login modal
         loginModal.style.display = 'flex';
     }
 });
