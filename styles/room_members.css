@@ -71,10 +71,6 @@
 }
 .member-name { 
     font-weight: 600; 
-    max-width: 360px;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
 }
 .role-badge { 
     font-size: 12px; 
@@ -90,8 +86,10 @@
     padding: 2px 8px;
     border-radius: 999px;
 }
-.presence-badge.offline { color: #6b7280; background: #f3f4f6; }
-.presence-badge + .role-badge { margin-left: 8px; }
+.presence-badge.offline {
+    color: #6b7280;
+    background: #f3f4f6;
+}
 .member-actions { 
     display: flex; 
     align-items: center; 
@@ -105,26 +103,9 @@
     border-radius: 8px; 
     cursor: pointer; 
 }
-.btn-secondary { 
-    background: #e5e7eb; 
-    color: #111827; border: 
-    none; padding: 6px 10px; 
-    border-radius: 8px; 
-    cursor: pointer; 
-}
-.btn-primary { 
-    background: #3b82f6; 
-    color: white; 
-    border: none; 
-    padding: 6px 10px; 
-    border-radius: 8px; 
-    cursor: pointer; 
-}
-.btn-pill { 
-    border-radius: 999px; 
-    padding: 4px 10px; 
-    font-size: 12px; 
-}
+.btn-secondary { background: #e5e7eb; color: #111827; border: none; padding: 6px 10px; border-radius: 8px; cursor: pointer; }
+.btn-primary { background: #3b82f6; color: white; border: none; padding: 6px 10px; border-radius: 8px; cursor: pointer; }
+.btn-pill { border-radius: 999px; padding: 4px 10px; font-size: 12px; }
 
 /* Modal and helper classes are reused from chatrooms.css */
 .member-picker-group { 
@@ -178,105 +159,3 @@
 .section-title { margin: 12px 0; font-size: 18px; }
 .invites-card { background: #fff; border-radius: 12px; box-shadow: 0 8px 28px rgba(0,0,0,0.06); padding: 12px 14px; }
 .invite-empty { color: #6b7280; font-size: 14px; }
-
-/* Responsive: tablet */
-@media (max-width: 768px) {
-    .members-page { 
-        margin: 12px auto; 
-        padding: 0 12px; 
-    }
-    .members-header { 
-        flex-wrap: wrap; 
-        gap: 8px; 
-    }
-    .members-header .left { 
-        gap: 12px; 
-    }
-    .title { 
-        font-size: 20px; 
-    }
-    .member-row { 
-        padding: 10px 12px; 
-    }
-    .member-avatar { 
-        width: 32px; 
-        height: 32px; 
-    }
-    .member-name { 
-        max-width: 220px; 
-    }
-    .member-actions { 
-        gap: 6px; 
-        flex-wrap: wrap; 
-    }
-    .btn-primary, .btn-secondary, .btn-danger { 
-        padding: 6px 8px; 
-        font-size: 14px; 
-    }
-    .btn-pill { 
-        padding: 4px 8px; 
-        font-size: 11px; 
-    }
-}
-
-/* Responsive: phone */
-@media (max-width: 480px) {
-    .members-page { 
-        margin: 0; 
-        padding: 8px; 
-    }
-    .members-header { 
-        align-items: flex-start; 
-    }
-    .title { 
-        font-size: 18px; 
-    }
-    .back-link { 
-        padding: 6px 10px; 
-        font-size: 14px; 
-    }
-    .right { 
-        margin-left: 0; 
-        padding: 0; 
-    }
-    .right button { 
-        padding: 8px 10px; 
-        font-size: 14px; 
-    }
-
-    .members-list-section { 
-        border-radius: 10px; 
-    }
-    .member-row {
-        flex-direction: column;
-        align-items: flex-start;
-        gap: 10px;
-    }
-    .member-info {
-         gap: 10px; 
-    }
-    .member-avatar { 
-        width: 30px; 
-        height: 30px; 
-    }
-    .member-name { 
-        max-width: 100%; 
-        font-size: 15px; 
-    }
-    .role-badge, .presence-badge { 
-        font-size: 11px; 
-        padding: 2px 6px; 
-    }
-    .member-actions {
-        width: 100%;
-        display: flex;
-        gap: 8px;
-        flex-wrap: wrap;
-    }
-    .member-actions .btn-danger,
-    .member-actions .btn-secondary,
-    .member-actions .btn-primary { 
-        padding: 8px 10px; 
-        font-size: 14px; 
-    }
-}

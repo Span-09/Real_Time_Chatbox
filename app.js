@@ -1,9 +1,8 @@
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js'
 import {
   getAuth,
-  onAuthStateChanged,
-  setPersistence,
-  browserLocalPersistence
+  signInAnonymously,
+  onAuthStateChanged
 } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js'
 import {
   getFirestore,
@@ -15,7 +14,8 @@ import {
   orderBy,
   doc,
   setDoc,
-  updateDoc
+  updateDoc,
+  getDoc
 } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js'
 import {
   getStorage,
@@ -30,16 +30,14 @@ const firebaseConfig = {
     apiKey: "AIzaSyDEpEbOdl7ysRoYZBj3phVcfA5wxE6W37c",
     authDomain: "real-time-chatbot-372f7.firebaseapp.com",
     projectId: "real-time-chatbot-372f7",
-  storageBucket: "real-time-chatbot-372f7.appspot.com",
+    storageBucket: "real-time-chatbot-372f7.firebasestorage.app", // <-- This is the corrected line
     messagingSenderId: "88476999060",
-  appId: "1:88476999060:web:ec54d7298b84333d274381",
+    appId: "1:88476g999060:web:ec54d7298b84333d274381",
 };
 
 // --- Initialize Firebase ---
 const app = initializeApp(firebaseConfig)
 const auth = getAuth(app)
-// Persist session across reloads/tabs on this device
-try { await setPersistence(auth, browserLocalPersistence) } catch (e) { console.warn('Auth persistence setup failed:', e) }
 const db = getFirestore(app)
 const storage = getStorage(app)
 
@@ -58,12 +56,16 @@ const manageMembersBtn = document.getElementById('manage-members-btn')
 
 let typingTimeout = null
 let isTyping = false
+let lastTypingWriteAt = 0
+const TYPING_THROTTLE_MS = 2000
 const urlParams = new URLSearchParams(window.location.search)
 const roomId = urlParams.get('roomId')
 const roomTitle = urlParams.get('title')
 let currentUser = null
 let lastMessageDate = null
 let selectedImageFile = null
+let presenceIntervalId = null
+const userCache = new Map()
 
 if (!roomId || !roomTitle) {
   window.location.href = 'chatrooms.html'
@@ -76,27 +78,33 @@ backButton.addEventListener('click', () => {
 })
 
 onAuthStateChanged(auth, user => {
-  if (user && !user.isAnonymous) {
+  if (user) {
     currentUser = user
     sendButton.disabled = false
     listenForMessages(roomId)
+  startPresenceHeartbeat()
   } else {
-    // Require explicit sign-in on chatrooms page
-    window.location.href = 'chatrooms.html'
+    signInAnonymously(auth).catch(err => console.error(err))
   }
 })
 
 sendButton.addEventListener('click', sendMessage)
 messageInput.addEventListener('keydown', event => {
+  const now = Date.now()
   if (!isTyping) {
     setTypingStatus(true)
     isTyping = true
+    lastTypingWriteAt = now
+  } else if (now - lastTypingWriteAt >= TYPING_THROTTLE_MS) {
+    // Refresh updatedAt but throttle
+    setTypingStatus(true)
+    lastTypingWriteAt = now
   }
   clearTimeout(typingTimeout)
   typingTimeout = setTimeout(() => {
     setTypingStatus(false)
     isTyping = false
-  }, 1200)
+  }, 5000)
 
   if (event.key === 'Enter' && !event.shiftKey) {
     event.preventDefault()
@@ -217,6 +225,19 @@ function listenForMessages (currentRoomId) {
       await markAllUnseenAsSeen(lastSnapshot, currentUser.uid)
     }
   })
+
+  // Minimal cleanup: ensure typing is cleared if user navigates away
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) {
+      setTypingStatus(false)
+      isTyping = false
+    }
+  })
+  window.addEventListener('beforeunload', () => {
+    try {
+      setTypingStatus(false)
+    } catch {}
+  })
 }
 
 function markAsRead (userId, currentRoomId) {
@@ -295,40 +316,82 @@ function displayMessage (message, isSent, myUid) {
 function setTypingStatus (isTyping) {
   if (!currentUser) return
   const typingRef = doc(db, 'chatrooms', roomId, 'typing', currentUser.uid)
-  setDoc(typingRef, { typing: isTyping, timestamp: serverTimestamp() })
+  setDoc(typingRef, { isTyping: isTyping, updatedAt: serverTimestamp() })
 }
 
 function listenForTyping (currentRoomId) {
   const typingCol = collection(db, 'chatrooms', currentRoomId, 'typing')
   onSnapshot(typingCol, snapshot => {
-    let someoneTyping = false
+    const typers = []
     snapshot.docs.forEach(docSnap => {
-      if (docSnap.id !== currentUser?.uid && docSnap.data().typing) {
-        someoneTyping = true
+      const d = docSnap.data()
+  if (docSnap.id !== currentUser?.uid && d.isTyping) {
+        typers.push(docSnap.id)
       }
     })
-    if (someoneTyping) {
-      showTypingIndicator()
-    } else {
-      removeTypingIndicator()
-    }
+    updateTypingIndicator(typers)
   })
 }
 
-function showTypingIndicator () {
-  if (document.getElementById('typing-indicator')) return
-  const typingDiv = document.createElement('div')
-  typingDiv.className = 'message-bubble received typing-indicator'
-  typingDiv.id = 'typing-indicator'
-  typingDiv.innerHTML =
-    '<div class="message-text"><span></span><span></span><span></span></div>'
-  chatArea.appendChild(typingDiv)
+async function updateTypingIndicator (uids) {
+  let el = document.getElementById('typing-indicator')
+  if (!uids || uids.length === 0) {
+    if (el) el.remove()
+    return
+  }
+  if (!el) {
+    el = document.createElement('div')
+    el.id = 'typing-indicator'
+    el.className = 'typing-banner'
+    chatArea.appendChild(el)
+  }
+  // Resolve names with cache
+  const names = []
+  for (const uid of uids) {
+    const name = await getDisplayName(uid)
+    names.push(name)
+  }
+  let text = ''
+  if (names.length === 1) text = `${names[0]} is typing…`
+  else if (names.length === 2) text = `${names[0]} and ${names[1]} are typing…`
+  else text = `${names[0]}, ${names[1]} and ${names.length - 2} others are typing…`
+  el.textContent = text
   chatArea.scrollTop = chatArea.scrollHeight
 }
 
 function removeTypingIndicator () {
-  const typingDiv = document.getElementById('typing-indicator')
-  if (typingDiv) typingDiv.remove()
+  const el = document.getElementById('typing-indicator')
+  if (el) el.remove()
+}
+
+async function getDisplayName (uid) {
+  if (userCache.has(uid)) return userCache.get(uid)
+  try {
+    const u = await getDoc(doc(db, 'users', uid))
+    const name = u.exists()
+      ? (u.data().displayName || u.data().email || 'Someone')
+      : 'Someone'
+    userCache.set(uid, name)
+    return name
+  } catch {
+    return 'Someone'
+  }
+}
+
+function startPresenceHeartbeat () {
+  if (!currentUser) return
+  const presRef = doc(db, 'presence', currentUser.uid)
+  const ping = (status = 'online') => {
+    setDoc(presRef, { userId: currentUser.uid, status, lastActiveAt: serverTimestamp() }, { merge: true })
+  }
+  ping('online')
+  if (presenceIntervalId) clearInterval(presenceIntervalId)
+  presenceIntervalId = setInterval(() => ping('online'), 30000)
+  window.addEventListener('focus', () => ping('online'))
+  window.addEventListener('blur', () => ping('away'))
+  window.addEventListener('online', () => ping('online'))
+  window.addEventListener('offline', () => ping('offline'))
+  window.addEventListener('beforeunload', () => ping('offline'))
 }
 
 function createAndDisplayDateSeparator (date) {

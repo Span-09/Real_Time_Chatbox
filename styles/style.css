@@ -146,6 +146,18 @@ body {
 }
 
 /* Static Typing Indicator */
+.typing-banner {
+    clear: both;
+    float: none;
+    width: fit-content;
+    max-width: 85%;
+    background: rgba(0,0,0,0.06);
+    color: #111827;
+    padding: 6px 10px;
+    border-radius: 12px;
+    margin: 6px 0;
+    font-size: 13px;
+}
 .typing-indicator .message-text {
     display: flex;
     align-items: center;

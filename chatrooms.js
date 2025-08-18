@@ -22,6 +22,22 @@ try {
     console.warn("Auth persistence setup failed:", e);
 }
 const db = getFirestore(app);
+let presenceIntervalId = null;
+
+function startPresenceHeartbeat(user) {
+    if (!user) return;
+    const presRef = doc(db, 'presence', user.uid);
+    const ping = (status = 'online') => {
+        setDoc(presRef, { userId: user.uid, status, lastActiveAt: serverTimestamp() }, { merge: true });
+    };
+    ping('online');
+    if (presenceIntervalId) clearInterval(presenceIntervalId);
+    presenceIntervalId = setInterval(() => ping('online'), 30000);
+    window.addEventListener('focus', () => ping('online'));
+    window.addEventListener('blur', () => ping('away'));
+    window.addEventListener('online', () => ping('online'));
+    window.addEventListener('offline', () => ping('offline'));
+}
 
 // --- DOM References ---
 const chatroomListEl = document.getElementById('chatroom-list');
@@ -128,7 +144,8 @@ async function upsertUserProfile(user) {
 // --- Authentication ---
 onAuthStateChanged(auth, async user => {
     currentUser = user ? user : null;
-    if (currentUser && !currentUser.isAnonymous) {
+    if (currentUser) {
+    startPresenceHeartbeat(currentUser);
         // Only upsert if user is NOT anonymous
         if (!currentUser.isAnonymous) {
             await ensureProfileDefaults(currentUser);
@@ -148,7 +165,6 @@ onAuthStateChanged(auth, async user => {
         listenForMuteChanges();
         populateCreateFromRoomSelect();
     } else {
-        // Not signed in or anonymous: show login modal
         loginModal.style.display = 'flex';
     }
 });

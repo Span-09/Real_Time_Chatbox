@@ -1,5 +1,5 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
-import { getAuth, onAuthStateChanged, setPersistence, browserLocalPersistence } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
+import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
 import { getFirestore, doc, getDoc, collection, onSnapshot, setDoc, deleteDoc, serverTimestamp, query, where, getDocs, writeBatch, limit, orderBy, startAt, endAt } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
 // Firebase config must match your project
@@ -14,7 +14,6 @@ const firebaseConfig = {
 
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
-try { await setPersistence(auth, browserLocalPersistence) } catch (e) { console.warn('Auth persistence setup failed:', e) }
 const db = getFirestore(app);
 
 // DOM
@@ -41,6 +40,23 @@ let myRole = 'member';
 let roomTitle = '';
 let membersCache = new Map(); // uid -> { displayName, email, photoUrl, role }
 let selectedToAdd = []; // [{ uid, displayName }]
+const presenceUnsubs = new Map(); // uid -> unsubscribe
+let presenceIntervalId = null;
+
+function startPresenceHeartbeat() {
+  if (!currentUser) return;
+  const presRef = doc(db, 'presence', currentUser.uid);
+  const ping = (status = 'online') => {
+    setDoc(presRef, { userId: currentUser.uid, status, lastActiveAt: serverTimestamp() }, { merge: true });
+  };
+  ping('online');
+  if (presenceIntervalId) clearInterval(presenceIntervalId);
+  presenceIntervalId = setInterval(() => ping('online'), 30000);
+  window.addEventListener('focus', () => ping('online'));
+  window.addEventListener('blur', () => ping('away'));
+  window.addEventListener('online', () => ping('online'));
+  window.addEventListener('offline', () => ping('offline'));
+}
 
 function getQueryParam(name) {
   const params = new URLSearchParams(location.search);
@@ -77,11 +93,15 @@ function renderMembers() {
     const name = document.createElement('div');
     name.className = 'member-name';
     name.textContent = m.displayName || m.email || uid;
+  const presence = document.createElement('span');
+  presence.className = 'presence-badge' + (m.online ? '' : ' offline');
+  presence.textContent = m.online ? '• Online' : '• Offline';
     const role = document.createElement('span');
     role.className = 'role-badge';
     role.textContent = m.role;
     left.appendChild(img);
     left.appendChild(name);
+  left.appendChild(presence);
     left.appendChild(role);
 
     const right = document.createElement('div');
@@ -265,6 +285,7 @@ function listenToMembers() {
   return onSnapshot(membersRef, async (snapshot) => {
     membersCache.clear();
     const admins = [];
+    const nextUids = new Set();
     for (const docSnap of snapshot.docs) {
       const m = docSnap.data();
       // enrich from users collection for display name and avatar
@@ -276,11 +297,42 @@ function listenToMembers() {
           email: info.email || '',
           photoUrl: info.photoUrl || '',
           role: m.role || 'member',
+          online: false,
         };
         membersCache.set(docSnap.id, entry);
         if (entry.role === 'admin') admins.push(docSnap.id);
       } catch {
-        membersCache.set(docSnap.id, { displayName: docSnap.id, email: '', photoUrl: '', role: m.role || 'member' });
+        membersCache.set(docSnap.id, { displayName: docSnap.id, email: '', photoUrl: '', role: m.role || 'member', online: false });
+      }
+      nextUids.add(docSnap.id);
+    }
+    // Manage presence listeners
+    // Unsubscribe for users no longer in list
+    for (const [uid, unsub] of presenceUnsubs.entries()) {
+      if (!nextUids.has(uid)) {
+        try { unsub(); } catch {}
+        presenceUnsubs.delete(uid);
+      }
+    }
+    // Subscribe for new users
+    for (const uid of nextUids) {
+      if (!presenceUnsubs.has(uid)) {
+        const presRef = doc(db, 'presence', uid);
+        const unsub = onSnapshot(presRef, (presSnap) => {
+          const curr = membersCache.get(uid);
+          if (!curr) return;
+          if (presSnap.exists()) {
+            const d = presSnap.data();
+            const ts = d.lastActiveAt && typeof d.lastActiveAt.toDate === 'function' ? d.lastActiveAt.toDate() : null;
+            const now = new Date();
+            const online = d.status !== 'offline' && ts && (now - ts) < 60000; // 60s window
+            curr.online = !!online;
+          } else {
+            curr.online = false;
+          }
+          renderMembers();
+        });
+        presenceUnsubs.set(uid, unsub);
       }
     }
     // Show admin actions if I am admin
@@ -304,10 +356,11 @@ async function init() {
 
   onAuthStateChanged(auth, async (user) => {
     currentUser = user || null;
-    if (!currentUser || currentUser.isAnonymous) {
+    if (!currentUser) {
       location.href = 'chatrooms.html';
       return;
     }
+  startPresenceHeartbeat();
     // Read my role in this room
     try {
       const myRef = await getDoc(doc(db, 'chatrooms', roomId, 'members', currentUser.uid));
