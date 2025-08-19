@@ -266,6 +266,28 @@ body {
     width: 30px;
     height: 30px;
 }
+.room-search { padding: 8px 16px 0 16px; }
+#room-search-input {
+    width: 100%;
+    box-sizing: border-box;
+    padding: 10px 12px;
+    margin: 0; /* avoid overflowing the container with extra margins */
+    border: 1px solid #ddd;
+    border-radius: 10px;
+}
+.room-search-results {
+    margin: 6px 0 0 0; /* align with container padding */
+    width: 100%;
+    box-sizing: border-box;
+    max-height: 200px;
+    overflow: auto;
+    background: #fff;
+    border: 1px solid #eee;
+    border-radius: 8px;
+}
+.room-search-item { padding: 8px 10px; cursor: pointer; }
+.room-search-item:hover { background: #f7f7f7; }
+.message-bubble.highlight { box-shadow: 0 0 0 3px #ffda79 inset; }
 #manage-members-btn{
     padding: 10px;
     border: none;
