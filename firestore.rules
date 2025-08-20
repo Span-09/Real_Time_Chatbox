@@ -1,0 +1,92 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isMember(roomId) {
+      return isSignedIn() && exists(/databases/$(database)/documents/chatrooms/$(roomId)/members/$(request.auth.uid));
+    }
+
+    function isAdmin(roomId) {
+      return isSignedIn()
+        && exists(/databases/$(database)/documents/chatrooms/$(roomId)/members/$(request.auth.uid))
+        && get(/databases/$(database)/documents/chatrooms/$(roomId)/members/$(request.auth.uid)).data.role == 'admin';
+    }
+
+    function isCreator(roomId) {
+      return isSignedIn()
+        && exists(/databases/$(database)/documents/chatrooms/$(roomId))
+        && get(/databases/$(database)/documents/chatrooms/$(roomId)).data.createdBy == request.auth.uid;
+    }
+
+    // Users
+    match /users/{userId} {
+      allow read: if isSignedIn();
+      allow write: if isSignedIn() && request.auth.uid == userId;
+    }
+
+    // Presence
+    match /presence/{uid} {
+      allow read: if isSignedIn();
+      allow write: if isSignedIn() && request.auth.uid == uid;
+    }
+
+    // Reads (per user per room)
+    match /reads/{userId}/rooms/{roomId} {
+      allow read: if isSignedIn() && request.auth.uid == userId;
+      allow write: if isSignedIn() && request.auth.uid == userId && isMember(roomId);
+    }
+
+    // Mutes (per user per room)
+    match /mutes/{userId}/rooms/{roomId} {
+      allow read, write: if isSignedIn() && request.auth.uid == userId;
+    }
+
+    // Chatrooms
+    match /chatrooms/{roomId} {
+      allow read: if isMember(roomId);
+      allow create: if isSignedIn();
+      allow update, delete: if isAdmin(roomId);
+
+      match /members/{memberId} {
+        allow read: if isMember(roomId);
+        // Admins manage others' roles
+  // Allow creator to bootstrap their own membership; otherwise admins manage
+  allow create: if isAdmin(roomId)
+          || (isSignedIn() && request.auth.uid == memberId && isCreator(roomId));
+        allow update: if isAdmin(roomId);
+        // Allow user to leave their own membership doc; admins may remove anyone
+        allow delete: if (isSignedIn() && request.auth.uid == memberId) || isAdmin(roomId);
+      }
+
+      match /messages/{messageId} {
+        allow read: if isMember(roomId);
+        // Creation must come from the sender
+        allow create: if isMember(roomId)
+                      && request.resource.data.senderId == request.auth.uid
+                      && request.resource.data.timestamp is timestamp
+                      && request.resource.data.deliveredTo is list
+                      && request.resource.data.seenBy is list;
+        // Updates: only allow expanding deliveredTo/seenBy; prevent edits to immutable fields
+        allow update: if isMember(roomId)
+                      && request.resource.data.senderId == resource.data.senderId
+                      && request.resource.data.text == resource.data.text
+                      && request.resource.data.imageUrl == resource.data.imageUrl
+                      && request.resource.data.timestamp == resource.data.timestamp
+                      && request.resource.data.keys().hasOnly(['senderId','text','imageUrl','timestamp','deliveredTo','seenBy'])
+                      && request.resource.data.deliveredTo.size() >= resource.data.deliveredTo.size()
+                      && request.resource.data.seenBy.size() >= resource.data.seenBy.size();
+        // Sender may delete their own message (optional)
+        allow delete: if isSignedIn() && request.auth.uid == resource.data.senderId;
+      }
+
+      match /typing/{userId} {
+        allow read: if isMember(roomId);
+        allow write: if isMember(roomId) && isSignedIn() && request.auth.uid == userId;
+      }
+    }
+  }
+}

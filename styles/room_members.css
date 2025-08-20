@@ -90,6 +90,9 @@
     color: #6b7280;
     background: #f3f4f6;
 }
+.presence-badge + .role-badge {
+    margin-left: 8px;
+}
 .member-actions { 
     display: flex; 
     align-items: center; 

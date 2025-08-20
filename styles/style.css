@@ -126,6 +126,14 @@ body {
     font-size: 14px;
     font-weight: 500;
 }
+.error-banner {
+    background: #fee2e2;
+    color: #991b1b;
+    padding: 8px 12px;
+    margin: 8px 16px 0 16px;
+    border: 1px solid #fecaca;
+    border-radius: 8px;
+}
 
 /* Date Separator */
 .date-separator {
