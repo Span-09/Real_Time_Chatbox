@@ -1,0 +1,16 @@
+{
+  "name": "real-time-chatbot-tests",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Emulator tests for Firestore security rules of Real_Time_Chatbot",
+  "scripts": {
+    "test": "mocha --timeout 20000 \"tests/**/*.test.js\"",
+    "test:emul": "firebase emulators:exec --only firestore \"npm test\""
+  },
+  "devDependencies": {
+    "@firebase/rules-unit-testing": "^3.0.2",
+    "chai": "^4.3.10",
+    "firebase-tools": "^13.21.1",
+    "mocha": "^10.4.0"
+  }
+}
