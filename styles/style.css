@@ -9,6 +9,15 @@ body {
     height: 100vh;
 }
 
+/* Smooth appear for newly rendered items */
+.fade-in {
+    animation: fadeIn 220ms ease-in;
+}
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(4px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
 /* Main Chat Container */
 .chat-container {
     width: 100%;
@@ -70,6 +79,18 @@ body {
     border-radius: 18px;
     margin-bottom: 10px;
     clear: both;
+}
+
+/* Skeleton shimmer for chat bubbles during initial load */
+.message-bubble.skeleton {
+    background: linear-gradient(90deg, #f0f0f0 25%, #e6e6e6 50%, #f0f0f0 75%);
+    background-size: 200% 100%;
+    animation: skeletonShimmer 1.4s ease-in-out infinite;
+    min-height: 44px;
+}
+@keyframes skeletonShimmer {
+    0% { background-position: 200% 0; }
+    100% { background-position: -200% 0; }
 }
 
 .message-image {
