@@ -43,8 +43,8 @@ const firebaseConfig = {
 // --- Initialize Firebase ---
 const app = initializeApp(firebaseConfig)
 const auth = getAuth(app)
-// Ensure session persists across tabs/reloads (same device)
-try { await setPersistence(auth, browserLocalPersistence) } catch (e) { console.warn('Auth persistence setup failed:', e) }
+// Ensure session persists across tabs/reloads (same device) without blocking module init
+setPersistence(auth, browserLocalPersistence).catch(e => console.warn('Auth persistence setup failed:', e))
 const db = getFirestore(app)
 const storage = getStorage(app)
 
@@ -66,6 +66,10 @@ const roomSearchResults = document.getElementById('room-search-results')
 const errorBanner = document.getElementById('error-banner')
 const retryBtn = document.getElementById('retry-btn')
 const retryRow = document.getElementById('retry-row')
+
+// Lightweight skeleton placeholders to improve perceived speed
+let skeletonPlaceholders = []
+let skeletonShown = false
 
 let typingTimeout = null
 let isTyping = false
@@ -242,6 +246,7 @@ function initMessages (currentRoomId) {
   chatArea.innerHTML = ''
   lastMessageDate = null
   removeTypingIndicator()
+  showSkeletons()
   messagesCache.length = 0
   searchIndex.length = 0
   oldestDocCursor = null
@@ -284,22 +289,28 @@ function initMessages (currentRoomId) {
 }
 
 async function loadInitialMessages (currentRoomId) {
-  const messagesRef = collection(db, 'chatrooms', currentRoomId, 'messages')
-  const qDesc = query(messagesRef, orderBy('timestamp', 'desc'), limit(PAGE_SIZE))
-  const snap = await getDocs(qDesc)
-  const docs = snap.docs
-  if (docs.length === 0) { return }
-  oldestDocCursor = docs[docs.length - 1]
-  hasMore = docs.length === PAGE_SIZE
-  // Build ascending list for render
-  const items = docs.map(d => ({ id: d.id, ...d.data() })).reverse()
-  items.forEach(m => cacheAndRenderMessage(m, 'append'))
-  newestTimestamp = items[items.length - 1].timestamp
-  await ensureDeliveryForLoaded(items)
-  // Scroll to bottom after initial load
-  chatArea.scrollTop = chatArea.scrollHeight
-  markAllLoadedUnseenAsSeen()
-  if (currentUser) markAsRead(currentUser.uid, currentRoomId)
+  try {
+    const messagesRef = collection(db, 'chatrooms', currentRoomId, 'messages')
+    const qDesc = query(messagesRef, orderBy('timestamp', 'desc'), limit(PAGE_SIZE))
+    const snap = await getDocs(qDesc)
+    const docs = snap.docs
+    if (docs.length === 0) { hideSkeletons(); return }
+    oldestDocCursor = docs[docs.length - 1]
+    hasMore = docs.length === PAGE_SIZE
+    // Build ascending list for render
+    const items = docs.map(d => ({ id: d.id, ...d.data() })).reverse()
+    items.forEach(m => cacheAndRenderMessage(m, 'append'))
+    hideSkeletons()
+    newestTimestamp = items[items.length - 1].timestamp
+    await ensureDeliveryForLoaded(items)
+    // Scroll to bottom after initial load
+    chatArea.scrollTop = chatArea.scrollHeight
+    markAllLoadedUnseenAsSeen()
+    if (currentUser) markAsRead(currentUser.uid, currentRoomId)
+  } finally {
+    // Ensure skeletons are not left on screen in any case
+    hideSkeletons()
+  }
 }
 
 async function loadOlderMessages (currentRoomId) {
@@ -514,6 +525,26 @@ function renderMessage (message, mode = 'append') {
     const delta = chatArea.scrollHeight - prevScrollHeight
     chatArea.scrollTop = chatArea.scrollTop + delta
   }
+}
+
+function showSkeletons () {
+  if (skeletonShown) return
+  skeletonShown = true
+  skeletonPlaceholders = []
+  for (let i = 0; i < 6; i++) {
+    const sk = document.createElement('div')
+    sk.className = 'message-bubble skeleton'
+    sk.style.minHeight = '40px'
+    sk.style.margin = '8px 0'
+    chatArea.appendChild(sk)
+    skeletonPlaceholders.push(sk)
+  }
+}
+function hideSkeletons () {
+  if (!skeletonShown) return
+  for (const sk of skeletonPlaceholders) { try { sk.remove() } catch {} }
+  skeletonPlaceholders = []
+  skeletonShown = false
 }
 
 function buildMessageElement (message, isSent, myUid) {
