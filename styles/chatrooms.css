@@ -74,6 +74,7 @@
     text-decoration: none;
     color: inherit;
     transition: background-color 0.2s ease;
+    animation: fadeIn 200ms ease-in;
 }
 
 .chatroom-item:hover {
@@ -126,6 +127,7 @@
     background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
     background-size: 200% 100%;
     animation: pulse 1.5s infinite ease-in-out;
+    border-bottom: 1px solid #f0f0f0;
 }
 /* Mute button styles */
 .mute-button {
@@ -150,6 +152,11 @@
 @keyframes pulse {
     0% { background-position: 200% 0; }
     100% { background-position: -200% 0; }
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(4px); }
+    to { opacity: 1; transform: translateY(0); }
 }
 /* Modal Styles */
 .modal-overlay {
